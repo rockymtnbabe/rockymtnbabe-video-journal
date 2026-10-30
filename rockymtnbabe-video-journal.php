@@ -2,14 +2,14 @@
 /**
  * Plugin Name: RockyMtnBabe Video Journal
  * Description: Lightweight R2-backed video catalog and Elementor gallery shortcode.
- * Version: 0.1.2
+ * Version: 0.1.3
  * Requires PHP: 7.4
  * Text Domain: rmb-video-journal
  */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 final class RMB_Video_Journal {
-    const VERSION = '0.1.2';
+    const VERSION = '0.1.3';
     const POST_TYPE = 'rmb_video';
     const TAXONOMY = 'rmb_video_category';
 
@@ -56,16 +56,65 @@ final class RMB_Video_Journal {
         add_meta_box( 'rmb_video_details', 'Video Details', array( __CLASS__, 'render_meta_box' ), self::POST_TYPE, 'normal', 'high' );
     }
 
+    /**
+     * Render a category-driven R2 path. The full URL remains stored in the original
+     * _rmb_video_url metadata field for backwards compatibility with existing videos.
+     */
     public static function render_meta_box( $post ) {
         wp_nonce_field( 'rmb_save_video', 'rmb_video_nonce' );
-        $url = get_post_meta( $post->ID, '_rmb_video_url', true );
-        $date = get_post_meta( $post->ID, '_rmb_video_date', true );
-        echo '<p><label for="rmb_video_url"><strong>Cloudflare R2 MP4 URL</strong></label></p>';
-        echo '<input type="url" id="rmb_video_url" name="rmb_video_url" value="' . esc_attr( $url ) . '" class="widefat" placeholder="https://videos.rockymtnbabe.com/fashion/example.mp4" />';
-        echo '<p class="description">Only HTTPS MP4 files on videos.rockymtnbabe.com are accepted. Store videos in R2, not the WordPress Media Library.</p>';
+        $url  = (string) get_post_meta( $post->ID, '_rmb_video_url', true );
+        $date = (string) get_post_meta( $post->ID, '_rmb_video_date', true );
+        $folder = '';
+        $filename = '';
+        if ( self::valid_url( $url ) ) {
+            $path = ltrim( (string) wp_parse_url( $url, PHP_URL_PATH ), '/' );
+            $segments = explode( '/', $path );
+            if ( count( $segments ) === 2 ) {
+                $folder = sanitize_title( $segments[0] );
+                $filename = $segments[1];
+            }
+        }
+        if ( $folder === '' ) {
+            $assigned = get_the_terms( $post->ID, self::TAXONOMY );
+            if ( is_array( $assigned ) && ! is_wp_error( $assigned ) ) {
+                $folder = $assigned[0]->slug;
+            }
+        }
+        $terms = get_terms( array( 'taxonomy' => self::TAXONOMY, 'hide_empty' => false ) );
+        if ( is_wp_error( $terms ) ) { $terms = array(); }
+
+        echo '<p><strong>Cloudflare R2 Video</strong></p>';
+        echo '<p><label for="rmb_video_folder"><strong>Category / R2 folder</strong></label></p>';
+        echo '<select id="rmb_video_folder" name="rmb_video_folder" class="widefat">';
+        echo '<option value="">Select a video category...</option>';
+        $found_folder = false;
+        foreach ( $terms as $term ) {
+            if ( $term->slug === $folder ) { $found_folder = true; }
+            echo '<option value="' . esc_attr( $term->slug ) . '" ' . selected( $folder, $term->slug, false ) . '>' . esc_html( $term->name ) . ' (' . esc_html( $term->slug ) . '/)</option>';
+        }
+        // Do not lose the folder of a legacy URL if its category was deleted.
+        if ( $folder !== '' && ! $found_folder ) {
+            echo '<option value="' . esc_attr( $folder ) . '" selected>' . esc_html( $folder ) . '/ (existing folder; category missing)</option>';
+        }
+        echo '</select>';
+        echo '<p class="description">Choose the R2 folder here. This also assigns the matching Video Category when you save. To add a category, use Video Journal → Video Categories, then reopen this editor.</p>';
+        echo '<p><label for="rmb_video_filename"><strong>MP4 filename</strong></label></p>';
+        echo '<input type="text" id="rmb_video_filename" name="rmb_video_filename" value="' . esc_attr( $filename ) . '" class="widefat" placeholder="2026-10-29_fashion_pink-latex-mini.mp4" spellcheck="false" autocomplete="off" />';
+        echo '<p class="description">Enter only the filename, including .mp4. No spaces or slashes.</p>';
+        echo '<p><strong>Generated URL (preview)</strong></p>';
+        echo '<p id="rmb_video_url_preview" style="overflow-wrap:anywhere;padding:10px;background:#f6f7f7;border:1px solid #dcdcde" aria-live="polite">' . esc_html( $url ? $url : 'https://videos.rockymtnbabe.com/' ) . '</p>';
+        echo '<p class="description">Base address: https://videos.rockymtnbabe.com/ — WordPress stores the completed URL; the file itself must already exist in R2.</p>';
         echo '<p><label for="rmb_video_date"><strong>Journal date</strong></label></p>';
         echo '<input type="date" id="rmb_video_date" name="rmb_video_date" value="' . esc_attr( $date ) . '" />';
-        echo '<p class="description">YYYY-MM-DD. Used for gallery sorting and the visible date. Add a Featured Image for the portrait thumbnail and assign a Video Category.</p>';
+        echo '<p class="description">YYYY-MM-DD. Used for gallery sorting and visible date. Add a Featured Image for the portrait thumbnail.</p>';
+    }
+
+    private static function valid_folder( $folder ) {
+        return is_string( $folder ) && preg_match( '/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $folder );
+    }
+
+    private static function valid_filename( $filename ) {
+        return is_string( $filename ) && preg_match( '/^[a-z0-9][a-z0-9_-]*\.mp4$/i', $filename );
     }
 
     public static function valid_url( $url ) {
@@ -80,10 +129,25 @@ final class RMB_Video_Journal {
         if ( ! isset( $_POST['rmb_video_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['rmb_video_nonce'] ) ), 'rmb_save_video' ) ) { return; }
         if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) { return; }
         if ( wp_is_post_revision( $post_id ) || ! current_user_can( 'edit_post', $post_id ) ) { return; }
-        if ( isset( $_POST['rmb_video_url'] ) ) {
-            $url = self::valid_url( wp_unslash( $_POST['rmb_video_url'] ) );
-            if ( $url ) { update_post_meta( $post_id, '_rmb_video_url', $url ); }
-            else { delete_post_meta( $post_id, '_rmb_video_url' ); }
+        // Keep the original _rmb_video_url field so existing catalog entries and
+        // the front-end shortcode require no migration.
+        if ( isset( $_POST['rmb_video_folder'], $_POST['rmb_video_filename'] ) ) {
+            $folder = sanitize_title( wp_unslash( $_POST['rmb_video_folder'] ) );
+            $filename = trim( sanitize_text_field( wp_unslash( $_POST['rmb_video_filename'] ) ) );
+            if ( self::valid_folder( $folder ) && self::valid_filename( $filename ) ) {
+                $url = self::valid_url( 'https://videos.rockymtnbabe.com/' . $folder . '/' . $filename );
+                if ( $url ) {
+                    update_post_meta( $post_id, '_rmb_video_url', $url );
+                    $term = get_term_by( 'slug', $folder, self::TAXONOMY );
+                    if ( $term && ! is_wp_error( $term ) ) {
+                        wp_set_object_terms( $post_id, array( (int) $term->term_id ), self::TAXONOMY, false );
+                    }
+                }
+            } elseif ( $folder === '' && $filename === '' ) {
+                // An intentionally cleared field removes the R2 link.
+                delete_post_meta( $post_id, '_rmb_video_url' );
+            }
+            // Incomplete or invalid inputs do not destroy a previously saved URL.
         }
         if ( isset( $_POST['rmb_video_date'] ) ) {
             $date = sanitize_text_field( wp_unslash( $_POST['rmb_video_date'] ) );
@@ -101,7 +165,13 @@ final class RMB_Video_Journal {
     public static function admin_assets( $hook ) {
         $screen = get_current_screen();
         if ( ! $screen || $screen->post_type !== self::POST_TYPE ) { return; }
-        // Uses WordPress's standard featured image/media controls; no external admin dependencies.
+        wp_enqueue_script(
+            'rmb-video-journal-admin',
+            plugin_dir_url( __FILE__ ) . 'assets/js/video-admin.js',
+            array(),
+            self::VERSION,
+            true
+        );
     }
 
     /**

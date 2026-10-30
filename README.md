@@ -1,4 +1,4 @@
-# RockyMtnBabe Video Journal — v0.1.0
+# RockyMtnBabe Video Journal — v0.1.3
 
 A lightweight, private-source WordPress plugin for publishing R2-hosted MP4 videos with Photo Journal-inspired gallery styling.
 
@@ -39,3 +39,20 @@ git push -u origin main
 ```
 
 Do not commit secrets, R2 API tokens, or a WordPress export. The built-in Gallery URL is public and not a secret.
+
+## v0.1.2
+
+- Preserve full-size thumbnail selection introduced in v0.1.1.
+- Enqueue gallery CSS early via `wp_enqueue_scripts` and Elementor preview enqueue hook, so preview styles load even without the old HTML widget.
+- No changes to the catalog records, shortcode interface, or lightbox JavaScript.
+
+## v0.1.3 — Category-driven video URLs
+
+- The Video Details panel now contains **Category / R2 folder**, **MP4 filename**, and a live generated URL preview.
+- The dropdown draws from the existing **Video Categories** taxonomy. Choose the folder from that dropdown; on save, the matching Video Category is assigned to the entry.
+- Upload the MP4 to the matching folder in Cloudflare R2 first; the plugin does not upload or rename objects.
+- Full R2 URLs are still stored in `_rmb_video_url`, so older videos and the `[rmb_video_gallery]` shortcode continue to work without migration.
+- If you later edit a category or rename/move an object in R2, confirm that the generated URL points to the actual location.
+- Invalid or incomplete file names do not overwrite an existing valid URL. Filenames must use letters, digits, underscores or hyphens and end in `.mp4`.
+- Create new categories under **Video Journal → Video Categories** and reopen the video editor to pick the new category.
+- Version 0.1.2's Elementor preview CSS fix and full-resolution thumbnails are preserved.
