@@ -2,14 +2,14 @@
 /**
  * Plugin Name: RockyMtnBabe Video Journal
  * Description: Lightweight R2-backed video catalog and Elementor gallery shortcode.
- * Version: 0.1.1
+ * Version: 0.1.2
  * Requires PHP: 7.4
  * Text Domain: rmb-video-journal
  */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 final class RMB_Video_Journal {
-    const VERSION = '0.1.1';
+    const VERSION = '0.1.2';
     const POST_TYPE = 'rmb_video';
     const TAXONOMY = 'rmb_video_category';
 
@@ -19,6 +19,9 @@ final class RMB_Video_Journal {
         add_action( 'save_post_' . self::POST_TYPE, array( __CLASS__, 'save_fields' ) );
         add_action( 'admin_enqueue_scripts', array( __CLASS__, 'admin_assets' ) );
         add_shortcode( 'rmb_video_gallery', array( __CLASS__, 'gallery_shortcode' ) );
+        // Enqueue styles before the document head is printed, including in Elementor preview.
+        add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue_gallery_styles' ) );
+        add_action( 'elementor/preview/enqueue_styles', array( __CLASS__, 'enqueue_gallery_styles' ) );
     }
 
     public static function activate() {
@@ -101,6 +104,20 @@ final class RMB_Video_Journal {
         // Uses WordPress's standard featured image/media controls; no external admin dependencies.
     }
 
+    /**
+     * Register and enqueue gallery CSS early. Elementor can render shortcode content
+     * after wp_head, at which point enqueueing for the first time is too late.
+     * Enqueueing this small, scoped stylesheet up front fixes editor preview.
+     */
+    public static function enqueue_gallery_styles() {
+        wp_enqueue_style(
+            'rmb-video-journal',
+            plugin_dir_url( __FILE__ ) . 'assets/css/video-journal.css',
+            array(),
+            self::VERSION
+        );
+    }
+
     public static function gallery_shortcode( $atts ) {
         $atts = shortcode_atts( array( 'limit' => '30', 'category' => '', 'month' => '' ), $atts, 'rmb_video_gallery' );
         $limit = max( 1, min( 100, absint( $atts['limit'] ) ) );
@@ -132,7 +149,6 @@ final class RMB_Video_Journal {
         } );
         $videos = array_slice( $videos, 0, $limit );
         if ( ! $videos ) { return current_user_can( 'edit_posts' ) ? '<p>No published videos with valid R2 URL and Featured Image found.</p>' : ''; }
-        wp_enqueue_style( 'rmb-video-journal', plugin_dir_url( __FILE__ ) . 'assets/css/video-journal.css', array(), self::VERSION );
         wp_enqueue_script( 'rmb-video-journal', plugin_dir_url( __FILE__ ) . 'assets/js/video-lightbox.js', array(), self::VERSION, true );
         $id = wp_unique_id( 'rmb-video-gallery-' );
         ob_start();
