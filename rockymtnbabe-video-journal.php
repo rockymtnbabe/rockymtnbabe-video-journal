@@ -2,14 +2,14 @@
 /**
  * Plugin Name: RockyMtnBabe Video Journal
  * Description: Lightweight R2-backed video catalog and Elementor gallery shortcode.
- * Version: 0.1.0
+ * Version: 0.1.1
  * Requires PHP: 7.4
  * Text Domain: rmb-video-journal
  */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 final class RMB_Video_Journal {
-    const VERSION = '0.1.0';
+    const VERSION = '0.1.1';
     const POST_TYPE = 'rmb_video';
     const TAXONOMY = 'rmb_video_category';
 
@@ -142,7 +142,7 @@ final class RMB_Video_Journal {
             $date_string = wp_date( 'M j, Y', strtotime( $video['date'] . ' 12:00:00' ) );
             echo '<article class="rmb-video-card">';
             echo '<button type="button" class="rmb-video-thumb" data-video="' . esc_url( $video['url'] ) . '" aria-label="' . esc_attr( 'Play ' . $title ) . '">';
-            echo wp_get_attachment_image( $video['thumb_id'], 'large', false, array( 'alt' => $title, 'loading' => 'lazy' ) );
+            echo wp_get_attachment_image( $video['thumb_id'], 'full', false, array( 'alt' => $title, 'loading' => 'lazy' ) );
             echo '<span class="rmb-video-brand" aria-hidden="true">ROCKYMTNBABE</span>';
             echo '<span class="rmb-video-date" aria-hidden="true">' . esc_html( $date_string ) . '</span>';
             echo '<span class="rmb-video-play" aria-hidden="true">▶</span></button>';
